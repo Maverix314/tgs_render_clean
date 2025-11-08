@@ -1,0 +1,20 @@
+{
+  "name": "tgs-render",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "The Guru Speaks operational prototype hosted version",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.78.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^5.1.0",
+    "openai": "^6.8.1",
+    "node-fetch": "^3.3.2"
+  }
+}
