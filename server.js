@@ -34,6 +34,7 @@ app.get("/", (req, res) => {
 
 // --- Chat route ---
 app.post("/chat", async (req, res) => {
+  console.log("Incoming /chat request:", req.body);
   const { message } = req.body;
   if (!message) return res.status(400).json({ error: "No message received." });
 
