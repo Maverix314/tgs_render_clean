@@ -4,55 +4,73 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>The Guru Speaks — Prototype Chat</title>
+
+  <!-- Fonts & Favicon -->
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link rel="icon" type="image/png" href="logo.png">
 
-
   <style>
-    body {
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
       background-color: #f5f5f5;
-      color: #222;
       font-family: 'Manrope', sans-serif;
+      color: #222;
       display: flex;
       justify-content: center;
-      align-items: flex-start;
-      min-height: 100vh;
-      padding: 40px 10px;
-      margin: 0;
+      align-items: center;
     }
 
     .chat-container {
       background-color: #ffffff;
       border: 1px solid #ddd;
       border-radius: 16px;
-      width: 100%;
+      width: 90%;
       max-width: 600px;
+      height: 90vh;                /* fills most of screen height */
+      display: flex;
+      flex-direction: column;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
       padding: 20px;
     }
 
     h1 {
-      font-size: 32px;
+      font-size: 28px;
       font-weight: 300;
-      font-style: normal;
-      margin-bottom: 16px;
+      text-align: center;
+      margin: 0 0 10px;
+      flex-shrink: 0;
+    }
+
+    .session-loader {
+      flex-shrink: 0;
+      margin-bottom: 10px;
       text-align: center;
     }
 
     #chat-box {
-      background-color: #fff;
-      color: #111;
+      flex: 1;                     /* takes remaining space */
       border: 1px solid #ddd;
       border-radius: 10px;
       padding: 10px;
-      height: 400px;
       overflow-y: auto;
       margin-bottom: 10px;
     }
 
-    select, button, textarea {
+    .chat-controls, textarea, button, select {
       font-family: 'Manrope', sans-serif;
       font-size: 15px;
+    }
+
+    textarea {
+      width: 100%;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      resize: none;
+      padding: 10px;
+      box-sizing: border-box;
+      margin-bottom: 8px;
     }
 
     button {
@@ -64,26 +82,14 @@
       transition: background-color 0.2s ease;
     }
 
-    button:hover {
-      background-color: #ddd;
-    }
-
-    textarea {
-      width: 100%;
-      box-sizing: border-box;
-      border-radius: 8px;
-      border: 1px solid #ccc;
-      resize: none;
-      padding: 10px;
-    }
+    button:hover { background-color: #ddd; }
 
     @media (max-width: 640px) {
       .chat-container {
+        width: 95%;
+        height: 90vh;
         padding: 15px;
         border-radius: 12px;
-      }
-      #chat-box {
-        height: 320px;
       }
     }
   </style>
@@ -98,7 +104,7 @@
       <select id="session-select">
         <option value="">-- Select a session --</option>
       </select>
-      <button id="load-session-btn">Load Session</button>
+      <button id="load-session-btn">Load</button>
     </div>
 
     <div id="chat-box"></div>
@@ -108,7 +114,7 @@
     </div>
 
     <textarea id="user-input" placeholder="What's on your mind?" rows="2"></textarea>
-    <button onclick="sendMessage()">Send</button>
+    <button id="send-btn">Send</button>
   </div>
 
   <script>
@@ -119,7 +125,8 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url, method, body }),
     });
-    return response.json();
+    try { return await response.json(); }
+    catch { return null; }
   }
 
   let sessionId = null;
@@ -130,17 +137,17 @@
       name: userName,
       started_at: new Date(),
     });
-    sessionId = data[0]?.session_id;
-    console.log(`New session created for ${userName}:`, sessionId);
+    if (Array.isArray(data) && data[0]) {
+      sessionId = data[0].session_id;
+      console.log("Session:", sessionId);
+    }
   }
 
   // --- Save message to Supabase ---
   async function saveMessage(role, content) {
     if (!sessionId) return;
     await callSupabase("/rest/v1/messages", "POST", {
-      session_id: sessionId,
-      role,
-      content,
+      session_id: sessionId, role, content,
     });
   }
 
@@ -150,11 +157,8 @@
     userName = prompt("What’s your name?");
     if (userName) localStorage.setItem("userName", userName);
   }
-  if (userName) {
-    createSession(userName);
-  } else {
-    alert("You must enter a name to start chatting.");
-  }
+  if (userName) createSession(userName);
+  else alert("You must enter a name to start chatting.");
 
   // --- Send message to Guru ---
   async function sendMessage() {
@@ -163,7 +167,7 @@
     if (!message) return;
 
     const chatBox = document.getElementById('chat-box');
-    chatBox.innerHTML += `<div class='user'><b>You:</b> ${message}</div>`;
+    chatBox.insertAdjacentHTML("beforeend", `<div class='user'><b>You:</b> ${message}</div>`);
     input.value = '';
 
     await saveMessage('user', message);
@@ -174,64 +178,45 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message })
       });
-
       const data = await response.json();
-      chatBox.innerHTML += `<div class='guru'><b>The Guru:</b> ${data.reply}</div>`;
+      chatBox.insertAdjacentHTML("beforeend", `<div class='guru'><b>The Guru:</b> ${data.reply}</div>`);
       chatBox.scrollTop = chatBox.scrollHeight;
-
       await saveMessage('assistant', data.reply);
-    } catch (error) {
-      chatBox.innerHTML += `<div class='guru'><b>Error:</b> Could not reach the server.</div>`;
+    } catch {
+      chatBox.insertAdjacentHTML("beforeend", `<div class='guru'><b>Error:</b> Could not reach the server.</div>`);
     }
   }
 
   // --- Export chat transcript ---
   async function exportTranscript() {
-    if (!sessionId) {
-      alert("No active session found.");
-      return;
-    }
-
+    if (!sessionId) { alert("No active session found."); return; }
     const data = await callSupabase(
       `/rest/v1/messages?session_id=eq.${sessionId}&select=role,content,created_at&order=created_at.asc`,
       "GET"
     );
+    if (!Array.isArray(data)) { alert("Error fetching messages."); return; }
 
-    if (!data || !Array.isArray(data)) {
-      alert("Error fetching messages.");
-      return;
-    }
-
-    const headers = ['role', 'content', 'created_at'];
-    const rows = [headers].concat(data.map(row => [row.role, row.content, row.created_at]));
-
-    function toCsvField(value) {
-      if (value === null || value === undefined) return '""';
-      const str = String(value).replace(/\r?\n/g, ' ');
-      const escaped = str.replace(/"/g, '""');
-      return `"${escaped}"`;
-    }
-
-    const csvContent = '\uFEFF' + rows.map(r => r.map(toCsvField).join(',')).join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const headers = ['role','content','created_at'];
+    const rows = [headers].concat(data.map(r => [r.role, r.content, r.created_at]));
+    const csv = '\uFEFF' + rows.map(r => r.map(v => `"${String(v||"").replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = `GuruTranscript_${sessionId}.csv`;
     link.click();
   }
 
-  // --- Load session list ---
+  // --- Populate previous sessions ---
   async function populateSessionList() {
     const select = document.getElementById("session-select");
-    const sessions = await callSupabase("/rest/v1/sessions?select=session_id,started_at&order=started_at.desc&limit=20", "GET");
-
+    const sessions = await callSupabase("/rest/v1/sessions?select=session_id,started_at&order=started_at.desc&limit=20","GET");
+    if (!Array.isArray(sessions)) return;
     select.innerHTML = '<option value="">-- Select a session --</option>';
     for (const s of sessions) {
-      const firstMsg = await callSupabase(`/rest/v1/messages?session_id=eq.${s.session_id}&role=eq.user&select=content&order=created_at.asc&limit=1`, "GET");
-      const preview =
-        firstMsg && firstMsg.length > 0
-          ? firstMsg[0].content.slice(0, 40) + (firstMsg[0].content.length > 40 ? "..." : "")
-          : "No messages yet";
+      const firstMsg = await callSupabase(`/rest/v1/messages?session_id=eq.${s.session_id}&role=eq.user&select=content&order=created_at.asc&limit=1`,"GET");
+      const preview = firstMsg?.[0]?.content
+        ? firstMsg[0].content.slice(0,40)+(firstMsg[0].content.length>40?"...":"")
+        : "No messages yet";
       const date = new Date(s.started_at).toLocaleString();
       const option = document.createElement("option");
       option.value = s.session_id;
@@ -240,38 +225,31 @@
     }
   }
 
-  // --- Load messages for selected session ---
-  async function loadSessionMessages(targetSessionId) {
+  // --- Load a selected session ---
+  async function loadSessionMessages(id) {
     const chatBox = document.getElementById("chat-box");
     chatBox.innerHTML = "";
-
-    const data = await callSupabase(`/rest/v1/messages?session_id=eq.${targetSessionId}&select=role,content,created_at&order=created_at.asc`, "GET");
-
+    const data = await callSupabase(`/rest/v1/messages?session_id=eq.${id}&select=role,content,created_at&order=created_at.asc`, "GET");
+    if (!Array.isArray(data)) return;
     for (const msg of data) {
-      const div = document.createElement("div");
-      div.className = msg.role;
-      div.innerHTML = `<b>${msg.role === "user" ? "You" : "The Guru"}:</b> ${msg.content}`;
-      chatBox.appendChild(div);
+      const who = msg.role === "user" ? "You" : "The Guru";
+      chatBox.insertAdjacentHTML("beforeend", `<div class='${msg.role}'><b>${who}:</b> ${msg.content}</div>`);
     }
     chatBox.scrollTop = chatBox.scrollHeight;
   }
 
   // --- Event listeners ---
   document.getElementById("user-input").addEventListener("keydown", e => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   });
-
+  document.getElementById("send-btn").addEventListener("click", sendMessage);
   document.getElementById("export-btn").addEventListener("click", exportTranscript);
   document.getElementById("load-session-btn").addEventListener("click", () => {
-    const selectedId = document.getElementById("session-select").value;
-    if (selectedId) loadSessionMessages(selectedId);
+    const id = document.getElementById("session-select").value;
+    if (id) loadSessionMessages(id);
     else alert("Please select a session first.");
   });
 
-  // --- Init ---
   populateSessionList();
   </script>
 </body>
