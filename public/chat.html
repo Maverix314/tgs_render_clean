@@ -43,11 +43,21 @@
       flex-shrink: 0;
     }
 
-    .session-loader {
-      flex-shrink: 0;
-      margin-bottom: 10px;
-      text-align: center;
-    }
+.session-loader {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;         /* keeps layout tidy on small screens */
+  margin-bottom: 10px;
+}
+
+.session-loader select {
+  width: 100%;
+  max-width: 280px;        /* optional: caps the size nicely on wide screens */
+  box-sizing: border-box;
+}
+
 
     #chat-box {
       flex: 1;                     /* takes remaining space */
