@@ -1,6 +1,7 @@
 // --- The Guru Speaks: Operational Prototype Server ---
 
 const express = require("express");
+const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 const cors = require("cors");
 const dotenv = require("dotenv");
 dotenv.config(); // Load environment variables early
