@@ -181,23 +181,36 @@ app.post("/supabase", async (req, res) => {
   const { url, method = "GET", body } = req.body;
 
   try {
-    const response = await fetch(`${SUPABASE_URL}${url}`, {
+    const options = {
       method,
       headers: {
-        "Content-Type": "application/json",
         "apikey": SUPABASE_ANON_KEY,
         "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
       },
-      body: body ? JSON.stringify(body) : undefined,
-    });
+    };
 
-    const data = await response.json();
-    res.json(data);
+    // Only include JSON headers and body for non-GET methods
+    if (method !== "GET") {
+      options.headers["Content-Type"] = "application/json";
+      if (body) options.body = JSON.stringify(body);
+    }
+
+    const response = await fetch(`${SUPABASE_URL}${url}`, options);
+    const text = await response.text();
+
+    try {
+      const data = JSON.parse(text);
+      res.json(data);
+    } catch {
+      console.error("Supabase proxy non-JSON:", text);
+      res.status(500).json({ error: "Unexpected Supabase response" });
+    }
   } catch (error) {
     console.error("Supabase proxy error:", error.message);
     res.status(500).json({ error: "Failed to contact Supabase" });
   }
 });
+
 
 
 // --- Start server ---
