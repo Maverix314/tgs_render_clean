@@ -176,6 +176,13 @@ Voice & Tone
 app.get('/health', (req, res) => {
   res.status(200).send('OK');
 });
+
+// --- Simple test route ---
+app.get("/ping", (req, res) => {
+  res.json({ ok: true, message: "Server responding fine" });
+});
+
+
 // --- Secure Supabase relay route ---
 app.post("/supabase", async (req, res) => {
   const { url, method = "GET", body } = req.body;
