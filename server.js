@@ -162,15 +162,7 @@ Voice & Tone
     // Add assistant reply to history
     conversationHistory.push({ role: "assistant", content: reply });
 
-    // Save to Supabase
-    try {
-      const { error: dbError } = await supabase
-        .from("episodes")
-        .insert([{ message, reply }]);
-      if (dbError) console.error("DB insert error:", dbError.message);
-    } catch (e) {
-      console.error("DB insert exception:", e.message);
-    }
+
 
     res.json({ reply });
   } catch (error) {
