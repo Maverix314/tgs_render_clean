@@ -35,7 +35,6 @@ app.get("/", (req, res) => {
 
 // --- Chat route ---
 app.post("/chat", async (req, res) => {
-  console.log("Incoming /chat request:", req.body);
   const { message } = req.body;
   if (!message) return res.status(400).json({ error: "No message received." });
 
@@ -175,6 +174,28 @@ Voice & Tone
 
 app.get('/health', (req, res) => {
   res.status(200).send('OK');
+});
+// --- Secure Supabase relay route ---
+app.post("/supabase", async (req, res) => {
+  const { url, method = "GET", body } = req.body;
+
+  try {
+    const response = await fetch(`${SUPABASE_URL}${url}`, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error("Supabase proxy error:", error.message);
+    res.status(500).json({ error: "Failed to contact Supabase" });
+  }
 });
 
 
