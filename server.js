@@ -112,13 +112,15 @@ app.post("/supabase", async (req, res) => {
   const { url, method = "GET", body } = req.body;
 
   try {
-    const options = {
-      method,
-      headers: {
-        "apikey": SUPABASE_ANON_KEY,
-        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
-      },
-    };
+const options = {
+  method,
+  headers: {
+    "apikey": SUPABASE_ANON_KEY,
+    "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+    "Accept": "application/json",
+    "Prefer": "return=representation"
+  },
+};
 
     // Only include JSON headers/body for non-GET
     if (method !== "GET") {
