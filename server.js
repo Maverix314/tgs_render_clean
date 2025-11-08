@@ -1,22 +1,16 @@
 // --- The Guru Speaks: Operational Prototype Server ---
 
 const express = require("express");
-const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
+const fetch = (...args) => import("node-fetch").then(({ default: fetch }) => fetch(...args));
 const cors = require("cors");
 const dotenv = require("dotenv");
 dotenv.config(); // Load environment variables early
-const fs = require("fs");
 
 // --- Supabase setup ---
 const { createClient } = require("@supabase/supabase-js");
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-console.log("🔍 ENV CHECK:", {
-  url: !!SUPABASE_URL,
-  key: !!SUPABASE_ANON_KEY,
-});
 
 // --- OpenAI setup ---
 const OpenAI = require("openai");
@@ -65,7 +59,6 @@ app.post("/chat", async (req, res) => {
         max_tokens: 40,
       });
       conversationSummary = summary.choices[0].message.content.trim();
-      console.log("Summary:", conversationSummary);
     } catch (e) {
       console.error("Summary update failed:", e.message);
     }
@@ -100,9 +93,10 @@ app.post("/chat", async (req, res) => {
   }
 });
 
+// --- Health check route ---
 app.get("/health", (req, res) => res.status(200).send("OK"));
 
-// --- Simple test route ---
+// --- Ping test route ---
 app.get("/ping", (req, res) => {
   res.json({ ok: true, message: "Server responding fine" });
 });
@@ -112,26 +106,25 @@ app.post("/supabase", async (req, res) => {
   const { url, method = "GET", body } = req.body;
 
   try {
-const options = {
-  method,
-  headers: {
-    "apikey": SUPABASE_ANON_KEY,
-    "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
-    "Accept": "application/json",
-    "Prefer": "return=representation"
-  },
-};
+    const options = {
+      method,
+      headers: {
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+        "Accept": "application/json",
+        "Prefer": "return=representation",
+      },
+    };
 
-    // Only include JSON headers/body for non-GET
+    // Include JSON body for non-GET requests
     if (method !== "GET") {
       options.headers["Content-Type"] = "application/json";
       if (body) options.body = JSON.stringify(body);
     }
-    console.log("🧭 Relay calling:", `${SUPABASE_URL}${url}`);
+
     const response = await fetch(`${SUPABASE_URL}${url}`, options);
     const text = await response.text();
 
-    // Try to parse JSON, otherwise return a trimmed preview of the raw text
     try {
       const data = JSON.parse(text);
       res.json(data);
