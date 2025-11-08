@@ -125,7 +125,7 @@ app.post("/supabase", async (req, res) => {
       options.headers["Content-Type"] = "application/json";
       if (body) options.body = JSON.stringify(body);
     }
-
+    console.log("🧭 Relay calling:", `${SUPABASE_URL}${url}`);
     const response = await fetch(`${SUPABASE_URL}${url}`, options);
     const text = await response.text();
 
