@@ -196,6 +196,11 @@ app.post("/supabase", async (req, res) => {
   }
 });
 
+// --- Keep-Alive Ping for Render Free Tier ---
+setInterval(() => {
+  fetch("https://the-guru-speaks.onrender.com/health").catch(() => {});
+}, 240000); // every 4 minutes
+
 // --- Start server ---
 const PORT = 3000;
 app.listen(PORT, () => {
