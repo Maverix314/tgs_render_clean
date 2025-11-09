@@ -23,44 +23,49 @@ app.use(express.static("public"));
 app.use(cors());
 app.use(express.json());
 
-// --- Simple in-memory history + summary ---
-let conversationHistory = [];
-const MAX_HISTORY = 6; // keep last few turns
+// --- Per-session rolling memory (prevents cross-session leakage) ---
+const sessionHistories = {};       // { [sessionId]: [{role, content}] }
+const MAX_HISTORY = 6;             // keep last N turns per session
 let conversationSummary = "User begins the session calm and curious.";
 
 // --- Root test route ---
 app.get("/", (req, res) => {
-  res.send("🕉️ The Guru Speaks: Prototype server is running.");
+  res.send("The Guru Speaks: Prototype server is running.");
 });
 
 // --- Chat route ---
 app.post("/chat", async (req, res) => {
-  const { message } = req.body;
+const { message, userName, sessionId: clientSessionId } = req.body || {};
   if (!message) return res.status(400).json({ error: "No message received." });
 
-  try {
-    conversationHistory.push({ role: "user", content: message });
-    if (conversationHistory.length > MAX_HISTORY)
-      conversationHistory = conversationHistory.slice(-MAX_HISTORY);
+  // Use explicit sessionId if provided by client; otherwise fall back to IP (separates devices)
+  const sessionId = clientSessionId || req.ip || "default";
+  if (!sessionHistories[sessionId]) sessionHistories[sessionId] = [];
 
-    // --- Generate one-line emotional summary ---
+  try {
+    // Add latest user message to this session's history
+    sessionHistories[sessionId].push({ role: "user", content: message });
+    if (sessionHistories[sessionId].length > MAX_HISTORY) {
+      sessionHistories[sessionId] = sessionHistories[sessionId].slice(-MAX_HISTORY);
+    }
+
+    // --- Update one-line emotional summary (cheap + short) ---
     try {
       const summaryPrompt = `
-      Summarise the emotional state and main topic of this exchange in one short sentence.
-      Keep tone factual, e.g., "User feels anxious about finances and wants reassurance."
-      `;
+Summarise the emotional state and main topic of this exchange in one short sentence.
+Keep tone factual, e.g., "User feels anxious about finances and wants reassurance."`;
       const summary = await openai.chat.completions.create({
         model: "gpt-4o-mini",
         messages: [
           { role: "system", content: summaryPrompt },
-          ...conversationHistory,
+          ...sessionHistories[sessionId],
           { role: "user", content: message },
         ],
         max_tokens: 40,
       });
-      conversationSummary = summary.choices[0].message.content.trim();
+      conversationSummary = summary.choices?.[0]?.message?.content?.trim() || conversationSummary;
     } catch (e) {
-      console.error("Summary update failed:", e.message);
+      // non-fatal
     }
 
     // --- Main Guru reply ---
@@ -68,24 +73,83 @@ app.post("/chat", async (req, res) => {
       model: "gpt-4o",
       temperature: 0.9,
       presence_penalty: 0.4,
-      max_tokens: 400,
-      stop: ["\n\n", "User:", "You:"],
+      max_tokens: 700,              // ↑ allow full lists/guidance to finish
+      // Removed stop[] to avoid premature cutoffs mid-list
       messages: [
         {
           role: "system",
           content: `
 ## The Guru Speaks — System Prompt v6 (Inclusive Worldview Edition)
-[full Guru system prompt unchanged for brevity]
+
+**You are *The Guru* — a psychologically grounded spiritual mentor.**
+Your voice is calm, observant, and human — never robotic, indulgent, or detached. You speak with warmth, clarity, and accountability.
+Your purpose is to help the user see themselves clearly, recognise patterns, and take gentle, practical steps toward growth.
+
+Voice & Tone
+- Speak in a **steady, conversational first-person** voice (“I hear…”, “Let’s look at…”).
+- Maintain a **grounded, curious, and compassionate** energy — calm, but never flat.
+- Use **simple, precise English** and natural rhythm. Mix short reflective lines with longer explorations.
+- Avoid cliché “guru” language, excessive body/breath references, or empty positivity.
+- Offer warmth without rescuing; guidance without authority.
+
+### Psychological Depth
+- Explore thought patterns, emotions, needs, behavioural loops, and meaning.
+- Translate belief language (faith-based, metaphysical, atheist) into shared human insight.
+- Never preach, convert, or dismiss. Translate beliefs into understanding.
+
+### Conversational Behaviour
+1. **Openings** — begin with attunement.
+2. **Middle** — reflect, question, or gently challenge.
+3. **Accountability** — link back to earlier statements if relevant.
+4. **Endings** — close softly, integrate or invite reflection.
+
+### Boundaries & Ethics
+- Never give medical or clinical advice.
+- Invite, don’t impose. Use phrases like *might*, *seems*, *perhaps*.
+- Prioritise safety and autonomy.
+
+### LANGUAGE LOCALISATION
+- Mirror the user's English variant automatically; default to British English if unsure.
+
+### Response Style
+- 3–8 sentences; vary rhythm.
+- Avoid formulaic empathy or repetition.
+
+### MICRO-STYLE OVERRIDE — GURU SPEAKS SIGNATURE
+- Conversational, slightly unpredictable; vary sentence length (2–12 words).
+- Small pauses or fragments allowed.
+- Speak as a peer, not a therapist.
+- 1 in 4 replies may start with a reflective fragment.
+- Trust silence when unsure.
+
+### EMOTIONAL DEPTH SELF-CHECK
+1. Reflection before reaction.
+2. Curiosity over certainty.
+3. Micro-risk in language.
+4. Compression then depth.
+5. Closure without finality.
+
+### DEPTH BEFORE ANALYSIS — STAY WITH THE MOMENT
+- When the user expresses an emotion or insight, pause and stay with it before analysing or advising.
+- Offer one small behavioural or psychological observation that explores what maintains that feeling or pattern.
+- Ending with reflection is acceptable.
+
+### REFLECTIVE CLOSURE — ENDING WITHOUT A QUESTION
+- Closing with a reflection or brief stillness is acceptable.
           `,
         },
         { role: "system", content: `Context summary: ${conversationSummary}` },
-        ...conversationHistory,
+        ...sessionHistories[sessionId],
         { role: "user", content: message },
       ],
     });
 
-    const reply = completion.choices[0].message.content.trim();
-    conversationHistory.push({ role: "assistant", content: reply });
+    const reply = completion.choices?.[0]?.message?.content?.trim() || "(no reply)";
+    sessionHistories[sessionId].push({ role: "assistant", content: reply });
+    if (sessionHistories[sessionId].length > MAX_HISTORY) {
+      sessionHistories[sessionId] = sessionHistories[sessionId].slice(-MAX_HISTORY);
+    }
+
     res.json({ reply });
   } catch (error) {
     console.error("OpenAI error:", error.message);
@@ -93,7 +157,6 @@ app.post("/chat", async (req, res) => {
   }
 });
 
-// --- Health check route ---
 app.get("/health", (req, res) => res.status(200).send("OK"));
 
 // --- Ping test route ---
@@ -104,7 +167,6 @@ app.get("/ping", (req, res) => {
 // --- Secure Supabase relay route ---
 app.post("/supabase", async (req, res) => {
   const { url, method = "GET", body } = req.body;
-
   try {
     const options = {
       method,
@@ -115,25 +177,18 @@ app.post("/supabase", async (req, res) => {
         "Prefer": "return=representation",
       },
     };
-
-    // Include JSON body for non-GET requests
     if (method !== "GET") {
       options.headers["Content-Type"] = "application/json";
       if (body) options.body = JSON.stringify(body);
     }
-
     const response = await fetch(`${SUPABASE_URL}${url}`, options);
     const text = await response.text();
-
     try {
       const data = JSON.parse(text);
       res.json(data);
     } catch {
       console.error("Supabase non-JSON response:", text.slice(0, 200));
-      res.status(502).json({
-        error: "Invalid JSON from Supabase",
-        preview: text.slice(0, 200),
-      });
+      res.status(502).json({ error: "Invalid JSON from Supabase", preview: text.slice(0, 200) });
     }
   } catch (error) {
     console.error("Supabase relay error:", error.message);
