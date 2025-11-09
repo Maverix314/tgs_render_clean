@@ -196,10 +196,17 @@ app.post("/supabase", async (req, res) => {
   }
 });
 
-// --- Keep-Alive Ping for Render Free Tier ---
+// --- Keep-Alive Ping (Always-On Edition) ---
+// Prevents Render's free tier from idling by pinging the app every 4 minutes.
+const KEEP_ALIVE_URL = "https://the-guru-speaks.onrender.com/health";
+const KEEP_ALIVE_INTERVAL = 240000; // every 4 minutes
+
 setInterval(() => {
-  fetch("https://the-guru-speaks.onrender.com/health").catch(() => {});
-}, 240000); // every 4 minutes
+  fetch(KEEP_ALIVE_URL)
+    .then(() => console.log(`[KeepAlive] Pinged at ${new Date().toISOString()}`))
+    .catch(() => console.warn(`[KeepAlive] Ping failed at ${new Date().toISOString()}`));
+}, KEEP_ALIVE_INTERVAL);
+
 
 // --- Start server ---
 const PORT = 3000;
