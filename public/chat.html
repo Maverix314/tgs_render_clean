@@ -21,7 +21,6 @@
       align-items: center;
     }
 
-    /* --- Custom preloader --- */
     #preloader {
       position: fixed;
       top: 0;
@@ -40,17 +39,9 @@
       opacity: 1;
       transition: opacity 1s ease;
     }
-    .loader-text {
-      animation: fadePulse 2.4s infinite ease-in-out;
-      letter-spacing: 0.4px;
-      opacity: 0.6;
-    }
-    @keyframes fadePulse {
-      0%, 100% { opacity: 0.4; }
-      50% { opacity: 1; }
-    }
+    .loader-text { animation: fadePulse 2.4s infinite ease-in-out; letter-spacing: 0.4px; opacity: 0.6; }
+    @keyframes fadePulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
 
-    /* --- Chat layout --- */
     .chat-container {
       background-color: #ffffff;
       border: 1px solid #ddd;
@@ -65,12 +56,8 @@
       opacity: 0;
       transition: opacity 1s ease;
     }
-    h1 {
-      font-size: 28px;
-      font-weight: 300;
-      text-align: center;
-      margin: 0 0 10px;
-    }
+
+    h1 { font-size: 28px; font-weight: 300; text-align: center; margin: 0 0 10px; }
 
     .session-loader {
       display: flex;
@@ -80,11 +67,7 @@
       flex-wrap: wrap;
       margin-bottom: 10px;
     }
-    .session-loader select {
-      width: 100%;
-      max-width: 280px;
-      box-sizing: border-box;
-    }
+    .session-loader select { width: 100%; max-width: 280px; box-sizing: border-box; }
 
     #chat-box {
       flex: 1;
@@ -128,7 +111,6 @@
       text-align: left;
     }
 
-    /* --- Guru list styling --- */
     .guru ol, .guru ul {
       margin: 10px 0 14px 1.25em;
       padding-left: 1em;
@@ -149,7 +131,6 @@
       text-indent: 0;
     }
 
-    /* --- Thinking indicator --- */
     #thinking {
       display: none;
       text-align: center;
@@ -220,7 +201,6 @@
   </div>
 
   <script>
-  // --- Secure Supabase call via backend ---
   async function callSupabase(url, method = "POST", body = null) {
     const response = await fetch("/supabase", {
       method: "POST",
@@ -255,16 +235,76 @@
   if (userName) createSession(userName);
   else alert("You must enter a name to start chatting.");
 
-  // --- Shared formatter for Guru replies (lists fixed) ---
+  // --- Load and populate previous sessions (with preview + working load) ---
+  async function populateSessionList() {
+    const select = document.getElementById("session-select");
+    select.innerHTML = '<option value="">Loading...</option>';
+
+    const sessions = await callSupabase(
+      "/rest/v1/sessions?select=session_id,started_at&order=started_at.desc&limit=20",
+      "GET"
+    );
+
+    if (!sessions || !Array.isArray(sessions)) {
+      select.innerHTML = '<option value="">(No sessions found)</option>';
+      console.warn("⚠️ No sessions returned:", sessions);
+      return;
+    }
+
+    select.innerHTML = '<option value="">-- Select a session --</option>';
+
+    for (const s of sessions) {
+      const firstMsg = await callSupabase(
+        `/rest/v1/messages?session_id=eq.${s.session_id}&role=eq.user&select=content&order=created_at.asc&limit=1`,
+        "GET"
+      );
+      const preview = firstMsg?.[0]?.content
+        ? firstMsg[0].content.slice(0, 40) + (firstMsg[0].content.length > 40 ? "..." : "")
+        : "No messages yet";
+      const date = new Date(s.started_at).toLocaleString();
+      const option = document.createElement("option");
+      option.value = s.session_id;
+      option.textContent = `${date} — ${preview}`;
+      select.appendChild(option);
+    }
+  }
+
+  // --- Load a selected session into the chat box ---
+  async function loadSessionMessages(id) {
+    const chatBox = document.getElementById("chat-box");
+    chatBox.innerHTML = "";
+
+    const messages = await callSupabase(
+      `/rest/v1/messages?session_id=eq.${id}&select=role,content,created_at&order=created_at.asc`,
+      "GET"
+    );
+    if (!Array.isArray(messages)) {
+      chatBox.insertAdjacentHTML("beforeend", `<div class='guru'>No messages found for this session.</div>`);
+      return;
+    }
+
+    for (const msg of messages) {
+      const who = msg.role === "user" ? userName : "The Guru";
+      const cls = msg.role === "user" ? "user" : "guru";
+      const formatted = msg.role === "assistant" ? formatReply(msg.content) : msg.content;
+      chatBox.insertAdjacentHTML("beforeend", `<div class='message ${cls}'><b>${who}:</b> ${formatted}</div>`);
+    }
+    chatBox.scrollTop = chatBox.scrollHeight;
+  }
+
+  // --- Hook up Load button ---
+  document.getElementById("load-session-btn").addEventListener("click", () => {
+    const id = document.getElementById("session-select").value;
+    if (!id) { alert("Please select a session first."); return; }
+    loadSessionMessages(id);
+  });
+
+  window.addEventListener("load", populateSessionList);
+
   function formatReply(raw) {
     if (!raw) return "";
-    let replyText = String(raw).trim()
-      .replace(/\r\n/g, '\n')
-      .replace(/\n{3,}/g, '\n\n');
-
-    // Markdown bold
+    let replyText = String(raw).trim().replace(/\r\n/g, '\n').replace(/\n{3,}/g, '\n\n');
     replyText = replyText.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
-
     const blocks = replyText.split(/\n{2,}/).map(b => b.trim()).filter(Boolean);
 
     function renderBlock(block) {
@@ -276,15 +316,12 @@
         const items = lines.map(l => {
           let body = l.replace(/^\s*\d+\.\s+/, '').replace(/^\s*[-•]\s+/, '').trim();
           let label = null, desc = body;
-
           let m = desc.match(/^<strong>([^<]+)<\/strong>\s*:?\s*(.*)$/);
           if (m) { label = m[1].trim(); desc = m[2].trim(); }
-
           if (!label) {
             m = desc.match(/^([A-Z][^:]{1,60})\s*:\s*(.*)$/);
             if (m) { label = m[1].trim(); desc = m[2].trim(); }
           }
-
           if (label) {
             const p = desc ? `<p class="li-desc">${desc}</p>` : "";
             return `<li><div class="li-title"><strong>${label}</strong></div>${p}</li>`;
@@ -292,13 +329,10 @@
             return `<li><p class="li-desc">${desc}</p></li>`;
           }
         }).join("");
-
         return (isNumbered ? `<ol>${items}</ol>` : `<ul>${items}</ul>`);
       }
-
       return `<p>${block}</p>`;
     }
-
     return blocks.map(renderBlock).join("");
   }
 
@@ -329,9 +363,7 @@
       const formattedReply = formatReply(data.reply);
       chatBox.insertAdjacentHTML("beforeend",
         `<div class='message guru'><b>The Guru:</b> ${formattedReply}</div>`);
-      setTimeout(() => {
-        chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: "smooth" });
-      }, 600);
+      setTimeout(() => { chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: "smooth" }); }, 600);
       await saveMessage('assistant', data.reply);
     } catch {
       chatBox.insertAdjacentHTML("beforeend",
@@ -353,13 +385,8 @@
   window.addEventListener('load', () => {
     const preloader = document.getElementById('preloader');
     const chatContainer = document.getElementById('chat-container');
-    if (preloader) {
-      preloader.style.opacity = '0';
-      setTimeout(() => preloader.remove(), 1000);
-    }
-    if (chatContainer) {
-      setTimeout(() => chatContainer.style.opacity = '1', 400);
-    }
+    if (preloader) { preloader.style.opacity = '0'; setTimeout(() => preloader.remove(), 1000); }
+    if (chatContainer) { setTimeout(() => chatContainer.style.opacity = '1', 400); }
   });
   </script>
 </body>
